@@ -158,7 +158,7 @@ end
 duration_parser = one_of_words('duration', 'short', 'medium', 'long')
 quantity_parser = one_of_words('quantity', 'few', 'a lot of', 'some')
 
-scale_type = one_of_words('scale_type', 'minor', 'major')
+scale_type = one_of_words('scale_type', 'minor', 'major', 'phrygian', 'majpent', 'minpent')
 scale_key = one_of_words('key', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
                          'CS', 'DS', 'FS', 'GS', 'AS')
 scale_parser = combine_and('scale_desc', optional(combine_and('scale_key', scale_key, sh_ws)),
@@ -215,14 +215,18 @@ function scale_type_to_scale(scale_type)
    if(scale_type == nil) then
       scale_type = 'chromatic'
    end
+   print('scale_type' .. scale_type)
    local modes = {chromatic = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11},
                   minor = {0, 2, 3, 5, 7, 8, 10},
-                  major = {0, 2, 4, 5, 7, 9, 11}}
+                  major = {0, 2, 4, 5, 7, 9, 11},
+                  phrygian = {0, 1, 4, 5, 7, 8, 10},
+                  minpent = {0, 3, 5, 7, 10},
+                  majpent = {0, 4, 5, 7, 11}}
    return modes[scale_type]
 end
 
 function rand_note(scale, root)
-   local octave = rand_int(2, 4)
+   local octave = rand_int(3, 4)
    local index = rand_int(1, #scale)
    return (root + scale[index]) + (octave * 12)
 end

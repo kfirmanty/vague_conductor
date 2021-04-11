@@ -95,24 +95,6 @@ function combine_or(...)
    end
 end
 
-function zero_or_more(tag, parser)
-   return function (text)
-      local result, rest
-      rest = text
-      results = {}
-      repeat
-         if(is_empty(rest)) then
-            return {tag = tag, match = results}
-         end
-         result, rest = parser(rest)
-         if(is_error(result)) then
-            return {tag = tag, match = results}, rest
-         end
-         table.insert(results, result)
-      until false
-   end
-end
-
 function combine_and(tag, ...)
    local args = {...}
    return function (text)
@@ -125,7 +107,7 @@ function combine_and(tag, ...)
             return result, rest
          end
          if(result ~= nil) then
-            table.insert(results, result)
+            results[result.tag] = result.match
          end
       end
       return {tag = tag, match = results}, rest
@@ -165,7 +147,7 @@ function parse(text, ...)
       if(is_error(result)) then
          return result, rest
       end
-      table.insert(results, result)
+      results[result.tag] = result.match
    end
    return results, rest
 end
@@ -175,7 +157,7 @@ local quantity_parser = one_of_words('quantity', 'few', 'a lot of', 'some')
 
 local scale_type = one_of_words('scale_type', 'minor', 'major')
 local scale_key = one_of_words('scale_key', 'c', 'd', 'e', 'f', 'g', 'a', 'b',
-                               'c#', 'd#', 'f#', 'g#', 'a#')
+                               'cs', 'ds', 'fs', 'gs', 'as')
 local scale_parser = combine_and('scale_desc', optional(combine_and(scale_key, sh_ws)),
                                  scale_type, sh_ws, sh_word('decor', 'scale'), sh_ws)
 
@@ -221,8 +203,8 @@ function scale_key_to_root(scale_key)
    if(scale_key == nil) then
       return 0
    end
-   local keys = {'c' = 0, 'd' = 2, 'e' = 4, 'f' = 5, 'g' = 7, 'a' = 9, 'b' = 11,
-                 'c#' = 1, 'd#' = 3, 'f#' = 6, 'g#' = 8, 'a#' = 10}
+   local keys = {c = 0, d = 2, e = 4, f = 5, g = 7, a = 9, b = 11,
+                 cs = 1, ds = 3, fs = 6, gs = 8, as = 10}
    return keys[scale_key]
 end
 
@@ -236,22 +218,11 @@ function scale_mode_to_notes(scale_mode)
    return modes[scale_mode]
 end
 
-function play_section(parsed)
-   local args = parsed.match
-   local repetitions = args[1].match
-   local duration = args[2]
-   return {command = 'play',
-           duration = duration_to_val(duration.match),
-           repetitions = quantity_to_val(repetitions)}
-end
-
-function play_section_sequence(parsed, options)
-   local args = parsed.match
-   local repetitions = quantity_to_val(args[1].match)
-   local duration = args[2]
+function play_section(parsed, options)
+   local repetitions = quantity_to_val(parsed.repetitions)
    local commands = {}
    for i=1,repetitions do
-      table.insert(commands, {command = 'play', duration = duration_to_val(duration.match), note = rand_int(24, 60)})
+      table.insert(commands, {command = 'play', duration = duration_to_val(parsed.duration), note = rand_int(24, 60)})
       table.insert(commands, {command = 'pause', duration = rand_int(1, 4)})
    end
    return commands

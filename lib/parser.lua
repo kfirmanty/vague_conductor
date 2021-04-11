@@ -1,5 +1,4 @@
 -- UTILS
-
 table.filter = function(t, pred)
    local out = {}
    for i, v in pairs(t) do
@@ -135,6 +134,23 @@ function optional(consumer)
    end
 end
 
+function zero_or_more(tag, parser)
+   return function (text)
+      local results = {}
+      local result, rest
+      rest = text
+      repeat
+         result, rest = parser(rest)
+         if(not is_error(result) and result ~= nil and result.tag ~= 'unmatched_optional') then
+            results[result.tag] = result.match
+         end
+         if(is_error(result) or rest == nil or is_empty(rest)) then
+            return {tag = tag, match = results}, rest
+         end
+      until(false)
+   end
+end
+
 function parse(text, ...)
    local parsers = {...}
    local result, rest
@@ -161,16 +177,23 @@ quantity_parser = one_of_words('quantity', 'few', 'a lot of', 'some')
 scale_type = one_of_words('scale_type', 'minor', 'major', 'phrygian', 'majpent', 'minpent')
 scale_key = one_of_words('key', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
                          'CS', 'DS', 'FS', 'GS', 'AS')
-scale_parser = combine_and('scale_desc', optional(combine_and('scale_key', scale_key, sh_ws)),
+scale_parser = combine_and('scale_desc',
+                           optional(sh_ws), optional(sh_word('decor', 'and')), optional(sh_ws),
+                           optional(combine_and('scale_key', scale_key, sh_ws)),
                            scale_type, sh_ws, sh_word('decor', 'scale'))
 
-pause_parser = combine_and('pause_desc', duration_parser, sh_ws, sh_word('decor', 'pauses'))
+pause_parser = combine_and('pause_desc',
+                           optional(sh_ws), optional(sh_word('decor', 'and')), optional(sh_ws),
+                           duration_parser, sh_ws, sh_word('decor', 'pauses'))
+
+options_parser = zero_or_more('options', combine_or(scale_parser, pause_parser))
 
 play_parser = combine_and('play_section',
                           sh_word('decor', 'play'),
                           sh_ws, parse_as('repetitions', combine_or(number, quantity_parser)), sh_ws,
                           duration_parser, sh_ws, sh_word('decor', 'notes'),
-                          optional(combine_and('options', sh_ws, sh_word('decor', 'with'), sh_ws, combine_or(scale_parser, pause_parser))))
+                          optional(sh_ws), optional(sh_word('decor', 'with')), optional(sh_ws),
+                          options_parser)
 
 --play 3 short notes with short pauses and high volume
 --play 3 long notes with short pauses
@@ -215,7 +238,6 @@ function scale_type_to_scale(scale_type)
    if(scale_type == nil) then
       scale_type = 'chromatic'
    end
-   print('scale_type' .. scale_type)
    local modes = {chromatic = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11},
                   minor = {0, 2, 3, 5, 7, 8, 10},
                   major = {0, 2, 4, 5, 7, 9, 11},
@@ -247,7 +269,7 @@ function play_section(parsed)
       scale_desc = default_scale_desc
    end
    
-  if(scale_desc.scale_key == nil) then
+   if(scale_desc.scale_key == nil) then
       scale_desc.scale_key = default_scale_desc.scale_key
    end
    
@@ -255,8 +277,8 @@ function play_section(parsed)
    local scale_root = scale_key_to_root(scale_desc.scale_key.key)
    
    local pause_desc = options.pause_desc
-      if(pause_desc == nil) then
-         pause_desc = default_pause_desc
+   if(pause_desc == nil) then
+      pause_desc = default_pause_desc
    end
    for i=1,repetitions do
       table.insert(commands, {command = 'play', duration = duration_to_val(parsed.duration), note = rand_note(scale, scale_root)})

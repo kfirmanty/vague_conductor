@@ -38,9 +38,10 @@ end
 
 function consume(tag, text, pattern)
    --print('[consume] tag: ' .. tag .. ' text: ' .. text .. ' pattern: ' .. pattern)
-   local matched=string.match(text, pattern)
-   local rest=string.gsub(text, pattern, '', 1)
-   if( is_empty(matched)) then
+   local matched = string.match(text, pattern)
+   local rest = string.gsub(text, pattern, '', 1)
+   local index_of = string.find(text,pattern)
+   if(is_empty(matched) or index_of ~= 1) then
       return error('failed to match ' .. tag .. ' in: ' .. text), text
    end
    --print('[consume] match = ' .. matched .. ' rest = ' .. rest)
@@ -106,7 +107,7 @@ function combine_and(tag, ...)
          if(is_error(result)) then
             return result, rest
          end
-         if(result ~= nil) then
+         if(result ~= nil and result.tag ~= 'unmatched_optional') then
             results[result.tag] = result.match
          end
       end
@@ -147,27 +148,29 @@ function parse(text, ...)
       if(is_error(result)) then
          return result, rest
       end
-      results[result.tag] = result.match
+      if(result ~= nil and result.tag ~= 'unmatched_optional') then
+         results[result.tag] = result.match
+      end
    end
    return results, rest
 end
 
-local duration_parser = one_of_words('duration', 'short', 'medium', 'long')
-local quantity_parser = one_of_words('quantity', 'few', 'a lot of', 'some')
+duration_parser = one_of_words('duration', 'short', 'medium', 'long')
+quantity_parser = one_of_words('quantity', 'few', 'a lot of', 'some')
 
-local scale_type = one_of_words('scale_type', 'minor', 'major')
-local scale_key = one_of_words('scale_key', 'c', 'd', 'e', 'f', 'g', 'a', 'b',
-                               'cs', 'ds', 'fs', 'gs', 'as')
-local scale_parser = combine_and('scale_desc', optional(combine_and(scale_key, sh_ws)),
-                                 scale_type, sh_ws, sh_word('decor', 'scale'), sh_ws)
+scale_type = one_of_words('scale_type', 'minor', 'major')
+scale_key = one_of_words('key', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
+                         'CS', 'DS', 'FS', 'GS', 'AS')
+scale_parser = combine_and('scale_desc', optional(combine_and('scale_key', scale_key, sh_ws)),
+                           scale_type, sh_ws, sh_word('decor', 'scale'))
 
-local pause_parser = combine_and('pause_desc', duration_parser, sh_ws, sh_word('decor', 'pauses'))
+pause_parser = combine_and('pause_desc', duration_parser, sh_ws, sh_word('decor', 'pauses'))
 
-
-local play_parser = combine_and('play_section',
-                                sh_word('decor', 'play'),
-                                sh_ws, parse_as('repetitions', combine_or(number, quantity_parser)), sh_ws,
-                                duration_parser, sh_ws, sh_word('decor', 'notes'))
+play_parser = combine_and('play_section',
+                          sh_word('decor', 'play'),
+                          sh_ws, parse_as('repetitions', combine_or(number, quantity_parser)), sh_ws,
+                          duration_parser, sh_ws, sh_word('decor', 'notes'),
+                          optional(combine_and('options', sh_ws, sh_word('decor', 'with'), sh_ws, combine_or(scale_parser, pause_parser))))
 
 --play 3 short notes with short pauses and high volume
 --play 3 long notes with short pauses
@@ -203,27 +206,53 @@ function scale_key_to_root(scale_key)
    if(scale_key == nil) then
       return 0
    end
-   local keys = {c = 0, d = 2, e = 4, f = 5, g = 7, a = 9, b = 11,
-                 cs = 1, ds = 3, fs = 6, gs = 8, as = 10}
+   local keys = {C = 0, D = 2, E = 4, F = 5, G = 7, A = 9, B = 11,
+                 CS = 1, DS = 3, FS = 6, GS = 8, AS = 10}
    return keys[scale_key]
 end
 
-function scale_mode_to_notes(scale_mode)
-   if(scale_mode == nil) then
-      scale_mode = 'chromatic'
+function scale_type_to_scale(scale_type)
+   if(scale_type == nil) then
+      scale_type = 'chromatic'
    end
    local modes = {chromatic = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11},
                   minor = {0, 2, 3, 5, 7, 8, 10},
                   major = {0, 2, 4, 5, 7, 9, 11}}
-   return modes[scale_mode]
+   return modes[scale_type]
 end
 
-function play_section(parsed, options)
+function rand_note(scale, root)
+   local octave = rand_int(0, 3)
+   local index = rand_int(1, #scale)
+   return (root + scale[index]) + (octave * 12)
+end
+
+function play_section(parsed)
    local repetitions = quantity_to_val(parsed.repetitions)
    local commands = {}
+   local options = parsed.options
+   local default_scale_desc = {scale_type = 'chromatic',
+                               scale_key = {key = 'C'}}
+   local default_pause_desc = {duration = 'short'}
+   if(options == nil) then
+      options = {scale_desc = default_scale_desc,
+                 pause_desc = default_pause_desc}
+   end
+   local scale_desc = options.scale_desc
+   if(scale_desc == nil) then
+      scale_desc = default_scale_desc
+   end
+   
+   local scale = scale_type_to_scale(scale_desc.scale_type)
+   local scale_root = scale_key_to_root(scale_desc.scale_key.key)
+   
+   local pause_desc = options.pause_desc
+      if(pause_desc == nil) then
+         pause_desc = default_pause_desc
+   end
    for i=1,repetitions do
-      table.insert(commands, {command = 'play', duration = duration_to_val(parsed.duration), note = rand_int(24, 60)})
-      table.insert(commands, {command = 'pause', duration = rand_int(1, 4)})
+      table.insert(commands, {command = 'play', duration = duration_to_val(parsed.duration), note = rand_note(scale, scale_root)})
+      table.insert(commands, {command = 'pause', duration = duration_to_val(pause_desc.duration)})
    end
    return commands
 end

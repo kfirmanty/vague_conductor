@@ -2,6 +2,24 @@ lu = require('luaunit')
 require 'parser'
 local inspect = require 'inspect'
 
+function test_scale_parser()
+   local result, rest = parse('C minor scale', scale_parser)
+   lu.assertFalse(is_error(result))
+   lu.assertEquals(result, {
+                      scale_desc = {
+                         scale_key = {
+                            scale_key = "C"
+                         },
+                         scale_type = "minor"
+   }})
+
+   result, rest = parse('minor scale', scale_parser)
+   lu.assertFalse(is_error(result))
+   lu.assertEquals(result, {
+                      scale_desc = {
+                         scale_type = "minor"}})
+end
+
 function test_simple_play_notes()
    local result, rest = listen('play 3 short notes')
    lu.assertFalse(is_error(result))
@@ -26,11 +44,23 @@ function test_play_section_parsing()
                    {duration = "long",
                     repetitions = "some"})
 
-
    result, rest = listen('play 3 short notes')
+   print(inspect(result))
    lu.assertFalse(is_error(result))
    local commands = play_section(result.play_section)
    lu.assertEquals(#commands, 6)
+
+   result, rest = listen('play 3 short notes with C minor scale')
+   lu.assertFalse(is_error(result))
+   print(inspect(result))
+   local commands = play_section(result.play_section)
+   lu.assertEquals(#commands, 6)
+
+   result, rest = listen('play 2 short notes with long pauses')
+   lu.assertFalse(is_error(result))
+   print(inspect(result))
+   local commands = play_section(result.play_section)
+   lu.assertEquals(#commands, 4)
 end
 
 os.exit(lu.LuaUnit.run())

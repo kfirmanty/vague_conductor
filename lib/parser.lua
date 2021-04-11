@@ -182,8 +182,8 @@ end
 
 function duration_to_val(desc)
    local fns = {short = function() return rand_int(1, 4) end,
-                medium = function() return rand_int(4, 8) end,
-                long = function() return rand_int(8, 16) end}
+                medium = function() return rand_int(4, 12) end,
+                long = function() return rand_int(12, 24) end}
    return fns[desc]()
 end
 
@@ -222,7 +222,7 @@ function scale_type_to_scale(scale_type)
 end
 
 function rand_note(scale, root)
-   local octave = rand_int(0, 3)
+   local octave = rand_int(2, 4)
    local index = rand_int(1, #scale)
    return (root + scale[index]) + (octave * 12)
 end
@@ -241,6 +241,10 @@ function play_section(parsed)
    local scale_desc = options.scale_desc
    if(scale_desc == nil) then
       scale_desc = default_scale_desc
+   end
+   
+  if(scale_desc.scale_key == nil) then
+      scale_desc.scale_key = default_scale_desc.scale_key
    end
    
    local scale = scale_type_to_scale(scale_desc.scale_type)

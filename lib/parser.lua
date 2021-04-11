@@ -185,8 +185,14 @@ scale_parser = combine_and('scale_desc',
 pause_parser = combine_and('pause_desc',
                            optional(sh_ws), optional(sh_word('decor', 'and')), optional(sh_ws),
                            duration_parser, sh_ws, sh_word('decor', 'pauses'))
+                         
+octave_parser = combine_and('octave_desc',
+                           optional(sh_ws), optional(sh_word('decor', 'and')), optional(sh_ws),
+                           optional(one_of_words('frequency', 'low', 'middle', 'high')), optional(sh_ws),
+                           one_of_words('span', 'narrow', 'medium', 'wide'), sh_ws, 
+                           sh_word('decor', 'octave'), sh_ws, sh_word('decor', 'span'))
 
-options_parser = zero_or_more('options', combine_or(scale_parser, pause_parser))
+options_parser = zero_or_more('options', combine_or(scale_parser, pause_parser, octave_parser))
 
 play_parser = combine_and('play_section',
                           sh_word('decor', 'play'),
@@ -221,6 +227,20 @@ function quantity_to_val(desc)
    end
 end
 
+function octave_frequency_to_val(desc)
+   local fns = {low = function() return rand_int(0, 1) end,
+                middle = function() return rand_int(2, 3) end,
+                high = function() return rand_int(4, 5) end}
+      return fns[desc]()
+end
+
+function octave_span_to_val(desc)
+   local fns = {narrow = function() return rand_int(0, 1) end,
+                medium = function() return rand_int(2, 3) end,
+                wide = function() return rand_int(4, 5) end}
+      return fns[desc]()
+end
+
 function listen(text)
    return parse(text, play_parser)
 end
@@ -247,10 +267,10 @@ function scale_type_to_scale(scale_type)
    return modes[scale_type]
 end
 
-function rand_note(scale, root)
-   local octave = rand_int(3, 4)
+function rand_note(scale, root, base_octave, octave_span)
+   local octave = rand_int(0, octave_span)
    local index = rand_int(1, #scale)
-   return (root + scale[index]) + (octave * 12)
+   return (root + scale[index]) + (base_octave * 12) + (octave * 12)
 end
 
 function play_section(parsed)
@@ -260,9 +280,12 @@ function play_section(parsed)
    local default_scale_desc = {scale_type = 'chromatic',
                                scale_key = {key = 'C'}}
    local default_pause_desc = {duration = 'short'}
+   local default_octave_desc = {frequency = 'low',
+                                span = 'narrow'}
    if(options == nil) then
       options = {scale_desc = default_scale_desc,
-                 pause_desc = default_pause_desc}
+                 pause_desc = default_pause_desc,
+                 octave_desc = default_octave_desc}
    end
    local scale_desc = options.scale_desc
    if(scale_desc == nil) then
@@ -280,8 +303,19 @@ function play_section(parsed)
    if(pause_desc == nil) then
       pause_desc = default_pause_desc
    end
+   
+   local octave_desc = options.octave_desc
+   if(octave_desc == nil) then
+      octave_desc = default_octave_desc
+   elseif(octave_desc.frequency == nil) then
+      octave_desc.frequency = default_octave_desc.frequency
+   end
    for i=1,repetitions do
-      table.insert(commands, {command = 'play', duration = duration_to_val(parsed.duration), note = rand_note(scale, scale_root)})
+      table.insert(commands, {command = 'play',
+                              duration = duration_to_val(parsed.duration),
+                              note = rand_note(scale, scale_root,
+                                               octave_frequency_to_val(octave_desc.frequency),
+                                               octave_span_to_val(octave_desc.span))})
       table.insert(commands, {command = 'pause', duration = duration_to_val(pause_desc.duration)})
    end
    return commands

@@ -21,7 +21,7 @@ function test_scale_parser()
 end
 
 function test_zero_or_more_parser()
-   local result, rest = parse('F minor scale and short pauses', options_parser)
+   local result, rest = parse('F minor scale and short pauses and low medium octave span', options_parser)
    print('options ' .. inspect(result))
 end
 

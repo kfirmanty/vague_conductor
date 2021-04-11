@@ -4,7 +4,7 @@ local keyb = hid.connect()
 local keycodes = include('lib/keycodes')
 include('lib/parser')
 
-local text = 'play 6 short notes'
+local text = 'play 6 short notes with C major scale and short pauses and low narrow octave span'
 local cursor = string.len(text)
 local enter_text_mode = true
 local commands = {}
